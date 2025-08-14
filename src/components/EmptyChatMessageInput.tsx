@@ -13,6 +13,8 @@ const EmptyChatMessageInput = ({
   setFocusMode,
   optimizationMode,
   setOptimizationMode,
+  maxIterations,
+  setMaxIterations,
   fileIds,
   setFileIds,
   files,
@@ -23,6 +25,8 @@ const EmptyChatMessageInput = ({
   setFocusMode: (mode: string) => void;
   optimizationMode: string;
   setOptimizationMode: (mode: string) => void;
+  maxIterations?: number;
+  setMaxIterations?: (iterations: number) => void;
   fileIds: string[];
   setFileIds: (fileIds: string[]) => void;
   files: File[];
@@ -97,6 +101,8 @@ const EmptyChatMessageInput = ({
             <Optimization
               optimizationMode={optimizationMode}
               setOptimizationMode={setOptimizationMode}
+              maxIterations={maxIterations}
+              setMaxIterations={setMaxIterations}
             />
             <button
               disabled={message.trim().length === 0}

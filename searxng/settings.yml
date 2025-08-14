@@ -8,6 +8,11 @@ search:
   formats:
     - html
     - json
+  
+  # Добавляем настройки ограничения запросов
+  rate_limit_time: 5.0  # 5 секунд минимальный интервал между запросами от одного клиента
+  time_out: 10.0        # время ожидания ответа от поисковых систем
+  limiter: true         # активируем ограничитель запросов
 
 server:
   secret_key: 'a2fb23f1b02e6ee83875b09826990de0f6bd908b6638e8c10277d415f6ab852b' # Is overwritten by ${SEARXNG_SECRET}

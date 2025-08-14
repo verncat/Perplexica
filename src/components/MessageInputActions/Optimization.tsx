@@ -23,8 +23,8 @@ const OptimizationModes = [
   },
   {
     key: 'quality',
-    title: 'Quality (Soon)',
-    description: 'Get the most thorough and accurate answer',
+    title: 'Quality',
+    description: 'Get the most thorough and accurate answer with iterative search',
     icon: (
       <Star
         size={16}
@@ -37,9 +37,13 @@ const OptimizationModes = [
 const Optimization = ({
   optimizationMode,
   setOptimizationMode,
+  maxIterations,
+  setMaxIterations,
 }: {
   optimizationMode: string;
   setOptimizationMode: (mode: string) => void;
+  maxIterations?: number;
+  setMaxIterations?: (iterations: number) => void;
 }) => {
   return (
     <Popover className="relative w-full max-w-[15rem] md:max-w-md lg:max-w-lg">
@@ -76,13 +80,11 @@ const Optimization = ({
               <PopoverButton
                 onClick={() => setOptimizationMode(mode.key)}
                 key={i}
-                disabled={mode.key === 'quality'}
                 className={cn(
                   'p-2 rounded-lg flex flex-col items-start justify-start text-start space-y-1 duration-200 cursor-pointer transition',
                   optimizationMode === mode.key
                     ? 'bg-light-secondary dark:bg-dark-secondary'
                     : 'hover:bg-light-secondary dark:hover:bg-dark-secondary',
-                  mode.key === 'quality' && 'opacity-50 cursor-not-allowed',
                 )}
               >
                 <div className="flex flex-row items-center space-x-1 text-black dark:text-white">
@@ -94,6 +96,34 @@ const Optimization = ({
                 </p>
               </PopoverButton>
             ))}
+            
+            {/* Контроль итераций для качественного режима */}
+            {optimizationMode === 'quality' && setMaxIterations && (
+              <div className="border-t border-light-200 dark:border-dark-200 pt-3 mt-1">
+                <div className="flex flex-col space-y-2">
+                  <div className="flex flex-row items-center space-x-1 text-black dark:text-white">
+                    <Star size={16} className="text-[#2196F3]" />
+                    <p className="text-sm font-medium">Max Iterations</p>
+                  </div>
+                  <div className="flex flex-row items-center space-x-2">
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={maxIterations || 2}
+                      onChange={(e) => setMaxIterations(parseInt(e.target.value))}
+                      className="flex-1 h-2 bg-light-200 dark:bg-dark-200 rounded-lg appearance-none cursor-pointer slider"
+                    />
+                    <span className="text-sm font-mono text-black dark:text-white min-w-[1.5rem] text-center">
+                      {maxIterations || 2}
+                    </span>
+                  </div>
+                  <p className="text-black/70 dark:text-white/70 text-xs">
+                    More iterations = higher quality but slower search
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </PopoverPanel>
       </Transition>

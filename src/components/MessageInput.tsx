@@ -6,6 +6,7 @@ import Attach from './MessageInputActions/Attach';
 import CopilotToggle from './MessageInputActions/Copilot';
 import { File } from './ChatWindow';
 import AttachSmall from './MessageInputActions/AttachSmall';
+import Optimization from './MessageInputActions/Optimization';
 
 const MessageInput = ({
   sendMessage,
@@ -14,6 +15,10 @@ const MessageInput = ({
   setFileIds,
   files,
   setFiles,
+  optimizationMode,
+  setOptimizationMode,
+  maxIterations,
+  setMaxIterations,
 }: {
   sendMessage: (message: string) => void;
   loading: boolean;
@@ -21,6 +26,10 @@ const MessageInput = ({
   setFileIds: (fileIds: string[]) => void;
   files: File[];
   setFiles: (files: File[]) => void;
+  optimizationMode: string;
+  setOptimizationMode: (mode: string) => void;
+  maxIterations?: number;
+  setMaxIterations?: (iterations: number) => void;
 }) => {
   const [copilotEnabled, setCopilotEnabled] = useState(false);
   const [message, setMessage] = useState('');
@@ -98,7 +107,13 @@ const MessageInput = ({
         placeholder="Ask a follow-up"
       />
       {mode === 'single' && (
-        <div className="flex flex-row items-center space-x-4">
+        <div className="flex flex-row items-center space-x-2 lg:space-x-4">
+          <Optimization
+            optimizationMode={optimizationMode}
+            setOptimizationMode={setOptimizationMode}
+            maxIterations={maxIterations}
+            setMaxIterations={setMaxIterations}
+          />
           <CopilotToggle
             copilotEnabled={copilotEnabled}
             setCopilotEnabled={setCopilotEnabled}
@@ -119,7 +134,13 @@ const MessageInput = ({
             files={files}
             setFiles={setFiles}
           />
-          <div className="flex flex-row items-center space-x-4">
+          <div className="flex flex-row items-center space-x-2 lg:space-x-4">
+            <Optimization
+              optimizationMode={optimizationMode}
+              setOptimizationMode={setOptimizationMode}
+              maxIterations={maxIterations}
+              setMaxIterations={setMaxIterations}
+            />
             <CopilotToggle
               copilotEnabled={copilotEnabled}
               setCopilotEnabled={setCopilotEnabled}
