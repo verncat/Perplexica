@@ -781,11 +781,23 @@ class MetaSearchAgent implements MetaSearchAgentType {
       );
       
       // Сохраняем информацию об итерациях для использования в UI
-      // Можно сохранить это в глобальном контексте или передать через метаданные
       console.log('Search iteration details:', JSON.stringify(searchResult.iterationDetails));
       
-      // Получаем улучшенные документы
+      // Добавляем информацию об итерациях ко всем документам
+      searchResult.docs = searchResult.docs.map(doc => {
+        // Копируем документ и добавляем метаданные
+        return new Document({
+          pageContent: doc.pageContent,
+          metadata: {
+            ...doc.metadata,
+            iterationDetails: searchResult.iterationDetails
+          }
+        });
+      });
+      
+      // Получаем улучшенные документы из всех итераций поиска
       const enhancedDocs = searchResult.docs;
+      console.log(`Total documents collected from iterative search: ${enhancedDocs.length}`);
       
       const [docEmbeddings, queryEmbedding] = await Promise.all([
         embeddings.embedDocuments(
@@ -817,12 +829,12 @@ class MetaSearchAgent implements MetaSearchAgentType {
         return { index: i, similarity: sim };
       });
 
-      // Более строгие критерии для качественного режима
-      const qualityThreshold = (this.config.rerankThreshold ?? 0.3) + 0.1;
+      // Сортируем все документы по релевантности, но не ограничиваем их количество
+      const qualityThreshold = (this.config.rerankThreshold ?? 0.3); // Снижаем порог для учета большего количества документов
       const sortedDocs = similarity
         .filter((sim: { index: number; similarity: number }) => sim.similarity > qualityThreshold)
         .sort((a: { index: number; similarity: number }, b: { index: number; similarity: number }) => b.similarity - a.similarity)
-        .slice(0, 20) // Больше документов для анализа
+        // Не ограничиваем количество документов, чтобы вернуть все найденные
         .map((sim: { index: number; similarity: number }) => {
           // Добавляем метаданные с информацией об итерациях в каждый документ
           const doc = docsWithFiles[sim.index];
