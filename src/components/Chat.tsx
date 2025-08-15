@@ -16,6 +16,10 @@ const Chat = ({
   setFileIds,
   files,
   setFiles,
+  optimizationMode,
+  setOptimizationMode,
+  maxIterations,
+  setMaxIterations,
 }: {
   messages: Message[];
   sendMessage: (message: string) => void;
@@ -26,6 +30,10 @@ const Chat = ({
   setFileIds: (fileIds: string[]) => void;
   files: File[];
   setFiles: (files: File[]) => void;
+  optimizationMode: string;
+  setOptimizationMode: (mode: string) => void;
+  maxIterations?: number;
+  setMaxIterations?: (iterations: number) => void;
 }) => {
   const [dividerWidth, setDividerWidth] = useState(0);
   const dividerRef = useRef<HTMLDivElement | null>(null);
@@ -99,6 +107,10 @@ const Chat = ({
             setFileIds={setFileIds}
             files={files}
             setFiles={setFiles}
+            optimizationMode={optimizationMode}
+            setOptimizationMode={setOptimizationMode}
+            maxIterations={maxIterations}
+            setMaxIterations={setMaxIterations}
           />
         </div>
       )}

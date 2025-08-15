@@ -61,6 +61,7 @@ The API accepts a JSON object in the request body, where you define the focus mo
 
   - `speed`: Prioritize speed and return the fastest answer.
   - `balanced`: Provide a balanced answer with good speed and reasonable quality.
+  - `quality`: Get the most thorough and accurate answer with iterative search refinement.
 
 - **`query`** (string, required): The search query or question.
 

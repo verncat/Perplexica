@@ -18,12 +18,46 @@ import LineOutputParser from '../outputParsers/lineOutputParser';
 import { getDocumentsFromLinks } from '../utils/documents';
 import { Document } from 'langchain/document';
 import { searchSearxng } from '../searxng';
-import path from 'node:path';
-import fs from 'node:fs';
 import computeSimilarity from '../utils/computeSimilarity';
 import formatChatHistoryAsString from '../utils/formatHistory';
-import eventEmitter from 'events';
-import { StreamEvent } from '@langchain/core/tracers/log_stream';
+
+// Импорты Node.js для серверной части
+// @ts-ignore - Next.js обработает эти импорты на стороне сервера
+import path from 'node:path';
+// @ts-ignore
+import fs from 'node:fs';
+// @ts-ignore 
+import { EventEmitter } from 'events';
+
+// Создаем локальный эмиттер событий
+const eventEmitter = new EventEmitter();
+
+// Тип для потока событий LangChain
+interface StreamEvent {
+  event: string;
+  name?: string;
+  data: {
+    chunk?: string;
+    output?: any;
+    [key: string]: any;
+  };
+}
+
+// Типы для данных
+interface SimilarityResult {
+  index: number;
+  similarity: number;
+}
+
+// Тип для Node.js process
+declare global {
+  namespace NodeJS {
+    interface Process {
+      cwd(): string;
+    }
+  }
+  var process: NodeJS.Process;
+}
 
 export interface MetaSearchAgentType {
   searchAndAnswer: (
@@ -34,7 +68,8 @@ export interface MetaSearchAgentType {
     optimizationMode: 'speed' | 'balanced' | 'quality',
     fileIds: string[],
     systemInstructions: string,
-  ) => Promise<eventEmitter>;
+    maxIterations?: number,
+  ) => Promise<EventEmitter>;
 }
 
 interface Config {
@@ -238,6 +273,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
     embeddings: Embeddings,
     optimizationMode: 'speed' | 'balanced' | 'quality',
     systemInstructions: string,
+    maxIterations?: number,
   ) {
     return RunnableSequence.from([
       RunnableMap.from({
@@ -272,6 +308,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
             fileIds,
             embeddings,
             optimizationMode,
+            llm,
+            maxIterations,
           );
 
           return sortedDocs;
@@ -293,12 +331,289 @@ class MetaSearchAgent implements MetaSearchAgentType {
     });
   }
 
+  // Метод для анализа результатов поиска в качественном режиме с использованием LLM
+  private async analyzeSearchResults(
+    llm: BaseChatModel,
+    originalQuery: string,
+    docs: Document[],
+    iteration: number,
+    maxIterations?: number
+  ): Promise<{ 
+    needsMoreSearch: boolean; 
+    searchQueries?: string[]; 
+    confidence: number; 
+    analysisReasoning?: string 
+  }> {
+    if (docs.length === 0) {
+      return { 
+        needsMoreSearch: true, 
+        searchQueries: [originalQuery, `${originalQuery} basics`, `${originalQuery} explained`], 
+        confidence: 0 
+      };
+    }
+    
+    try {
+      // Используем LLM для анализа результатов поиска
+      // Создаем краткое резюме из найденных документов для анализа
+      const docsSummary = docs.slice(0, 10).map((doc, idx) => {
+        return `[${idx+1}] ${doc.metadata.title || 'Без заголовка'}: ${doc.pageContent.substring(0, 150)}...`;
+      }).join('\n\n');
+      
+      const maxIter = maxIterations || 2; // Если не указано, используем 2 итерации по умолчанию
+      
+      // Формируем промпт для LLM с нашим запросом и результатами поиска
+      const { searchAnalysisPrompt } = await import('../prompts/searchAnalysis');
+      const prompt = searchAnalysisPrompt
+        .replace('{originalQuery}', originalQuery)
+        .replace('{iteration}', iteration.toString())
+        .replace('{maxIterations}', maxIter.toString())
+        .replace('{docsCount}', docs.length.toString())
+        .replace('{docsSummary}', docsSummary);
+        
+      // Запрос к LLM
+      const llmResponse = await llm.invoke(prompt);
+      const responseText = llmResponse.content as string;
+      
+      // Извлечение JSON из ответа LLM
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       responseText.match(/\{[\s\S]*\}/);
+                       
+      if (!jsonMatch) {
+        console.error("Failed to extract JSON from LLM response:", responseText);
+        throw new Error("Invalid LLM response format");
+      }
+      
+      let analysisResult;
+      try {
+        // Извлекаем и парсим JSON
+        const jsonString = jsonMatch[1] || jsonMatch[0];
+        analysisResult = JSON.parse(jsonString);
+        
+        console.log(`LLM Analysis details: iteration=${iteration}, docs=${docs.length}, confidence=${analysisResult.confidenceScore}`);
+        console.log(`LLM analysis: ${analysisResult.analysisReasoning}`);
+        
+        // Проверяем наличие массива поисковых запросов
+        const searchQueries = analysisResult.searchQueries || [];
+        
+        return {
+          needsMoreSearch: analysisResult.needsMoreSearch && iteration < maxIter,
+          confidence: analysisResult.confidenceScore,
+          searchQueries: analysisResult.needsMoreSearch ? searchQueries : undefined,
+          analysisReasoning: analysisResult.analysisReasoning
+        };
+      } catch (jsonError) {
+        console.error("Error parsing JSON from LLM response:", jsonError);
+        throw jsonError;
+      }
+    } catch (error) {
+      console.error("Error in analyzeSearchResults:", error);
+      // В случае ошибки возвращаем безопасное значение - используем старую эвристику
+      const confidence = docs.length > 20 ? 0.9 : docs.length > 15 ? 0.7 : docs.length > 10 ? 0.5 : docs.length > 5 ? 0.3 : 0.1;
+      const needsMoreSearch = iteration < 2 && confidence < 0.6;
+      
+      console.log(`Fallback to heuristic: iteration=${iteration}, docs=${docs.length}, confidence=${confidence}`);
+      
+      // Создаём несколько запросов в случае фоллбэка
+      const fallbackQueries = this.generateFallbackQueries(originalQuery, iteration);
+      
+      return { 
+        needsMoreSearch,
+        confidence,
+        searchQueries: needsMoreSearch ? fallbackQueries : undefined
+      };
+    }
+  }
+
+  // Генерируем набор фоллбек-запросов для каждой итерации
+  private generateFallbackQueries(originalQuery: string, iteration: number): string[] {
+    // Базовые аспекты для первой итерации
+    if (iteration === 0) {
+      return [
+        `${originalQuery} basics`,
+        `${originalQuery} explained`,
+        `${originalQuery} introduction`,
+        `${originalQuery} definition`
+      ];
+    }
+    
+    // Более продвинутые аспекты для второй итерации
+    if (iteration === 1) {
+      return [
+        `${originalQuery} examples`,
+        `${originalQuery} applications`,
+        `${originalQuery} advanced concepts`,
+        `${originalQuery} vs`
+      ];
+    }
+    
+    // Глубокие аспекты для последующих итераций
+    return [
+      `${originalQuery} research`,
+      `${originalQuery} latest developments`,
+      `${originalQuery} limitations`,
+      `${originalQuery} future`
+    ];
+  }
+  
+  // Старый метод для обратной совместимости
+  private generateRefinedQuery(originalQuery: string, iteration: number): string {
+    const queries = this.generateFallbackQueries(originalQuery, iteration);
+    return queries[0] || `${originalQuery} in depth`;
+  }
+
+  // Хелпер для создания задержки между запросами
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  // Простой метод для выполнения одиночного поиска
+  private async performSingleSearch(query: string): Promise<Document[]> {
+    try {
+      const res = await searchSearxng(query, {
+        language: 'en',
+        engines: this.config.activeEngines,
+      });
+
+      return res.results.map(result => new Document({
+        pageContent: result.content || result.title,
+        metadata: {
+          title: result.title,
+          url: result.url,
+          ...(result.img_src && { img_src: result.img_src }),
+        },
+      }));
+    } catch (error) {
+      console.error('Error in single search:', error);
+      return [];
+    }
+  }
+
+  // Итеративный поиск для качественного режима с деталями итераций и несколькими запросами
+  private async performIterativeSearch(
+    llm: BaseChatModel,
+    originalQuery: string,
+    initialDocs: Document[],
+    maxIterations?: number
+  ): Promise<{
+    docs: Document[]; 
+    iterationDetails: Array<{ 
+      iteration: number; 
+      query: string; 
+      analysis?: string;
+    }>
+  }> {
+    let allDocs = [...initialDocs];
+    let iteration = 0;
+    const maxIter = maxIterations || 2; // Дефолт 2 если не указано
+    
+    // Массив для хранения деталей итераций для UI
+    const iterationDetails: Array<{ 
+      iteration: number; 
+      query: string; 
+      analysis?: string;
+    }> = [{
+      iteration: 1,
+      query: originalQuery
+    }];
+    
+    console.log(`Starting iterative search for: "${originalQuery}" with up to ${maxIter} iterations`);
+    
+    try {
+      while (iteration < maxIter) {
+        try {
+          const analysis = await this.analyzeSearchResults(llm, originalQuery, allDocs, iteration, maxIter);
+          
+          // Обновляем информацию о текущей итерации с анализом LLM
+          if (iterationDetails[iteration]) {
+            iterationDetails[iteration].analysis = analysis.analysisReasoning;
+          }
+          
+          console.log(`Iteration ${iteration + 1}: Confidence ${analysis.confidence}, Need more: ${analysis.needsMoreSearch}`);
+          
+          // Если не нужно дополнительного поиска или не получили запросов, завершаем
+          if (!analysis.needsMoreSearch || !analysis.searchQueries || analysis.searchQueries.length === 0) {
+            break;
+          }
+          
+          // Выполняем несколько поисков с разными запросами
+          console.log(`Refining search with ${analysis.searchQueries.length} queries`);
+          
+          let totalNewDocs = 0;
+          
+          // Проходим по всем запросам и выполняем поиск для каждого
+          for (let i = 0; i < analysis.searchQueries.length; i++) {
+            const query = analysis.searchQueries[i];
+            console.log(`Searching with query: "${query}"`);
+            
+            // Выполняем поиск с текущим запросом
+            const newDocs = await this.performSingleSearch(query);
+            
+            // Добавляем новые уникальные документы
+            const uniqueNewDocs = newDocs.filter(newDoc => 
+              !allDocs.some(existingDoc => existingDoc.metadata.url === newDoc.metadata.url)
+            );
+            
+            if (uniqueNewDocs.length > 0) {
+              allDocs.push(...uniqueNewDocs);
+              totalNewDocs += uniqueNewDocs.length;
+              
+              // Добавляем информацию о дополнительном запросе в итерации
+              iterationDetails.push({
+                iteration: iteration + 1,
+                query: query
+              });
+            }
+            
+            // Добавляем задержку между запросами, но не после последнего
+            if (i < analysis.searchQueries.length - 1) {
+              console.log("Adding delay between search queries to avoid rate limiting...");
+              await this.sleep(3000); // 3 секунды задержки между запросами
+            }
+          }
+          
+          console.log(`Added ${totalNewDocs} new documents from ${analysis.searchQueries.length} queries`);
+          
+          // Если не получили новых документов, прерываем цикл
+          if (totalNewDocs === 0) {
+            break;
+          }
+          
+          // Увеличиваем счетчик итераций
+          iteration++;
+          
+          // Добавляем задержку между итерациями, если это не последняя итерация
+          if (iteration < maxIter) {
+            console.log(`Waiting between iterations to avoid rate limiting...`);
+            await this.sleep(5000); // 5 секунд задержки между итерациями
+          }
+        } catch (error) {
+          console.error(`Error during iteration ${iteration + 1}:`, error);
+          // Прерываем итерации при ошибке и возвращаем то, что уже нашли
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Error in performIterativeSearch:", error);
+      // Возвращаем исходные документы в случае критической ошибки
+    }
+    
+    console.log(`Iterative search completed. Total documents: ${allDocs.length}`);
+    console.log(`Iteration details:`, JSON.stringify(iterationDetails, null, 2));
+    
+    return {
+      docs: allDocs,
+      iterationDetails
+    };
+  }
+
   private async rerankDocs(
     query: string,
     docs: Document[],
     fileIds: string[],
     embeddings: Embeddings,
     optimizationMode: 'speed' | 'balanced' | 'quality',
+    llm?: BaseChatModel,
+    maxIterations?: number,
   ) {
     if (docs.length === 0 && fileIds.length === 0) {
       return docs;
@@ -401,7 +716,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
       docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
 
-      const similarity = docEmbeddings.map((docEmbedding, i) => {
+      const similarity = docEmbeddings.map((docEmbedding: number[], i: number) => {
         const sim = computeSimilarity(queryEmbedding, docEmbedding);
 
         return {
@@ -411,10 +726,123 @@ class MetaSearchAgent implements MetaSearchAgentType {
       });
 
       const sortedDocs = similarity
-        .filter((sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
-        .sort((a, b) => b.similarity - a.similarity)
+        .filter((sim: SimilarityResult) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
+        .sort((a: SimilarityResult, b: SimilarityResult) => b.similarity - a.similarity)
         .slice(0, 15)
-        .map((sim) => docsWithContent[sim.index]);
+        .map((sim: SimilarityResult) => docsWithContent[sim.index]);
+
+      return sortedDocs;
+    } else if (optimizationMode === 'quality') {
+      // Качественный режим с итеративным поиском
+      if (!llm) {
+        console.warn('LLM not provided for quality mode, falling back to balanced');
+        // Fallback к balanced режиму
+        const [docEmbeddings, queryEmbedding] = await Promise.all([
+          embeddings.embedDocuments(
+            docsWithContent.map((doc) => doc.pageContent),
+          ),
+          embeddings.embedQuery(query),
+        ]);
+
+        docsWithContent.push(
+          ...filesData.map((fileData) => {
+            return new Document({
+              pageContent: fileData.content,
+              metadata: {
+                title: fileData.fileName,
+                url: `File`,
+              },
+            });
+          }),
+        );
+
+        docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
+
+        const similarity = docEmbeddings.map((docEmbedding: number[], i: number) => {
+          const sim = computeSimilarity(queryEmbedding, docEmbedding);
+          return { index: i, similarity: sim };
+        });
+
+        const sortedDocs = similarity
+          .filter((sim: { index: number; similarity: number }) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
+          .sort((a: { index: number; similarity: number }, b: { index: number; similarity: number }) => b.similarity - a.similarity)
+          .slice(0, 15)
+          .map((sim: { index: number; similarity: number }) => docsWithContent[sim.index]);
+
+        return sortedDocs;
+      }
+
+      // Выполняем итеративный поиск для улучшения результатов
+      const searchResult = await this.performIterativeSearch(
+        llm,
+        query,
+        docsWithContent,
+        maxIterations
+      );
+      
+      // Сохраняем информацию об итерациях для использования в UI
+      console.log('Search iteration details:', JSON.stringify(searchResult.iterationDetails));
+      
+      // Добавляем информацию об итерациях ко всем документам
+      searchResult.docs = searchResult.docs.map(doc => {
+        // Копируем документ и добавляем метаданные
+        return new Document({
+          pageContent: doc.pageContent,
+          metadata: {
+            ...doc.metadata,
+            iterationDetails: searchResult.iterationDetails
+          }
+        });
+      });
+      
+      // Получаем улучшенные документы из всех итераций поиска
+      const enhancedDocs = searchResult.docs;
+      console.log(`Total documents collected from iterative search: ${enhancedDocs.length}`);
+      
+      const [docEmbeddings, queryEmbedding] = await Promise.all([
+        embeddings.embedDocuments(
+          enhancedDocs.map((doc: Document) => doc.pageContent),
+        ),
+        embeddings.embedQuery(query),
+      ]);
+
+      const docsWithFiles = [...enhancedDocs];
+      
+      docsWithFiles.push(
+        ...filesData.map((fileData) => {
+          return new Document({
+            pageContent: fileData.content,
+            metadata: {
+              title: fileData.fileName,
+              url: `File`,
+              // Добавляем метаданные о поиске
+              iterationDetails: searchResult.iterationDetails
+            },
+          });
+        }),
+      );
+
+      docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
+
+      const similarity = docEmbeddings.map((docEmbedding: number[], i: number) => {
+        const sim = computeSimilarity(queryEmbedding, docEmbedding);
+        return { index: i, similarity: sim };
+      });
+
+      // Сортируем все документы по релевантности, но не ограничиваем их количество
+      const qualityThreshold = (this.config.rerankThreshold ?? 0.3); // Снижаем порог для учета большего количества документов
+      const sortedDocs = similarity
+        .filter((sim: { index: number; similarity: number }) => sim.similarity > qualityThreshold)
+        .sort((a: { index: number; similarity: number }, b: { index: number; similarity: number }) => b.similarity - a.similarity)
+        // Не ограничиваем количество документов, чтобы вернуть все найденные
+        .map((sim: { index: number; similarity: number }) => {
+          // Добавляем метаданные с информацией об итерациях в каждый документ
+          const doc = docsWithFiles[sim.index];
+          if (!doc.metadata.iterationDetails) {
+            doc.metadata.iterationDetails = searchResult.iterationDetails;
+          }
+          return doc;
+        });
 
       return sortedDocs;
     }
@@ -433,18 +861,34 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
   private async handleStream(
     stream: AsyncGenerator<StreamEvent, any, any>,
-    emitter: eventEmitter,
+    emitter: EventEmitter,
   ) {
     for await (const event of stream) {
       if (
         event.event === 'on_chain_end' &&
         event.name === 'FinalSourceRetriever'
       ) {
-        ``;
+        // Передаем источники
         emitter.emit(
           'data',
           JSON.stringify({ type: 'sources', data: event.data.output }),
         );
+        
+        // Проверяем наличие информации об итерациях в первом источнике
+        const sources = event.data.output;
+        if (sources && sources.length > 0) {
+          const firstSource = sources[0];
+          if (firstSource && firstSource.metadata && firstSource.metadata.iterationDetails) {
+            // Отдельно передаем информацию об итерациях
+            emitter.emit(
+              'data',
+              JSON.stringify({ 
+                type: 'iterations', 
+                data: firstSource.metadata.iterationDetails 
+              }),
+            );
+          }
+        }
       }
       if (
         event.event === 'on_chain_stream' &&
@@ -472,8 +916,9 @@ class MetaSearchAgent implements MetaSearchAgentType {
     optimizationMode: 'speed' | 'balanced' | 'quality',
     fileIds: string[],
     systemInstructions: string,
+    maxIterations?: number,
   ) {
-    const emitter = new eventEmitter();
+    const emitter = new EventEmitter();
 
     const answeringChain = await this.createAnsweringChain(
       llm,
@@ -481,6 +926,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
       embeddings,
       optimizationMode,
       systemInstructions,
+      maxIterations,
     );
 
     const stream = answeringChain.streamEvents(

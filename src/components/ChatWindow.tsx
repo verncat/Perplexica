@@ -309,6 +309,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
 
   const [focusMode, setFocusMode] = useState('webSearch');
   const [optimizationMode, setOptimizationMode] = useState('speed');
+  const [maxIterations, setMaxIterations] = useState(2);
 
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
 
@@ -504,6 +505,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
         files: fileIds,
         focusMode: focusMode,
         optimizationMode: optimizationMode,
+        maxIterations: optimizationMode === 'quality' ? maxIterations : undefined,
         history: rewrite
           ? chatHistory.slice(0, messageIndex === -1 ? undefined : messageIndex)
           : chatHistory,
@@ -605,6 +607,10 @@ const ChatWindow = ({ id }: { id?: string }) => {
               setFileIds={setFileIds}
               files={files}
               setFiles={setFiles}
+              optimizationMode={optimizationMode}
+              setOptimizationMode={setOptimizationMode}
+              maxIterations={maxIterations}
+              setMaxIterations={setMaxIterations}
             />
           </>
         ) : (
@@ -614,6 +620,8 @@ const ChatWindow = ({ id }: { id?: string }) => {
             setFocusMode={setFocusMode}
             optimizationMode={optimizationMode}
             setOptimizationMode={setOptimizationMode}
+            maxIterations={maxIterations}
+            setMaxIterations={setMaxIterations}
             fileIds={fileIds}
             setFileIds={setFileIds}
             files={files}

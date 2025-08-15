@@ -27,7 +27,7 @@ interface embeddingModel {
 }
 
 interface ChatRequestBody {
-  optimizationMode: 'speed' | 'balanced';
+  optimizationMode: 'speed' | 'balanced' | 'quality';
   focusMode: string;
   chatModel?: chatModel;
   embeddingModel?: embeddingModel;
@@ -35,6 +35,7 @@ interface ChatRequestBody {
   history: Array<[string, string]>;
   stream?: boolean;
   systemInstructions?: string;
+  maxIterations?: number;
 }
 
 export const POST = async (req: Request) => {
@@ -126,6 +127,7 @@ export const POST = async (req: Request) => {
       body.optimizationMode,
       [],
       body.systemInstructions || '',
+      body.maxIterations,
     );
 
     if (!body.stream) {

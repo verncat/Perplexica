@@ -61,6 +61,7 @@ const handleEmitterEvents = async (
 ) => {
   let recievedMessage = '';
   let sources: any[] = [];
+  let iterationDetails: any[] | undefined;
 
   stream.on('data', (data) => {
     const parsedData = JSON.parse(data);
@@ -77,6 +78,11 @@ const handleEmitterEvents = async (
 
       recievedMessage += parsedData.data;
     } else if (parsedData.type === 'sources') {
+      // Проверяем наличие информации об итерациях
+      if (parsedData.data && parsedData.data[0] && parsedData.data[0].metadata && parsedData.data[0].metadata.iterationDetails) {
+        iterationDetails = parsedData.data[0].metadata.iterationDetails;
+      }
+      
       writer.write(
         encoder.encode(
           JSON.stringify({
@@ -88,6 +94,19 @@ const handleEmitterEvents = async (
       );
 
       sources = parsedData.data;
+    } else if (parsedData.type === 'iterations') {
+      // Обработка информации об итерациях поиска отдельно
+      writer.write(
+        encoder.encode(
+          JSON.stringify({
+            type: 'iterations',
+            data: parsedData.data,
+            messageId: aiMessageId,
+          }) + '\n',
+        ),
+      );
+      
+      iterationDetails = parsedData.data;
     }
   });
   stream.on('end', () => {

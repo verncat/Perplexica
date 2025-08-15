@@ -11,6 +11,8 @@ const EmptyChat = ({
   setFocusMode,
   optimizationMode,
   setOptimizationMode,
+  maxIterations,
+  setMaxIterations,
   fileIds,
   setFileIds,
   files,
@@ -21,6 +23,8 @@ const EmptyChat = ({
   setFocusMode: (mode: string) => void;
   optimizationMode: string;
   setOptimizationMode: (mode: string) => void;
+  maxIterations?: number;
+  setMaxIterations?: (iterations: number) => void;
   fileIds: string[];
   setFileIds: (fileIds: string[]) => void;
   files: File[];
@@ -44,6 +48,8 @@ const EmptyChat = ({
             setFocusMode={setFocusMode}
             optimizationMode={optimizationMode}
             setOptimizationMode={setOptimizationMode}
+            maxIterations={maxIterations}
+            setMaxIterations={setMaxIterations}
             fileIds={fileIds}
             setFileIds={setFileIds}
             files={files}
