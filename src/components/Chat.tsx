@@ -6,6 +6,9 @@ import { File, Message } from './ChatWindow';
 import MessageBox from './MessageBox';
 import MessageBoxLoading from './MessageBoxLoading';
 
+import { SearchProgress, SearchProgressEvent } from './SearchProgress';
+import { useSearchProgress } from '@/hooks/useSearchProgress';
+
 const Chat = ({
   loading,
   messages,
@@ -38,6 +41,8 @@ const Chat = ({
   const [dividerWidth, setDividerWidth] = useState(0);
   const dividerRef = useRef<HTMLDivElement | null>(null);
   const messageEnd = useRef<HTMLDivElement | null>(null);
+  const isQualityMode = optimizationMode === 'quality' && loading;
+  const searchEvents = useSearchProgress(isQualityMode);
 
   useEffect(() => {
     const updateDividerWidth = () => {
@@ -71,6 +76,12 @@ const Chat = ({
 
   return (
     <div className="flex flex-col space-y-6 pt-8 pb-44 lg:pb-32 sm:mx-4 md:mx-8">
+      {optimizationMode === 'quality' && loading && (
+        <>
+          <div>Mode: {optimizationMode}, Loading: {loading.toString()}, Events: {searchEvents.length}</div>
+          {searchEvents.length > 0 && <SearchProgress events={searchEvents} />}
+        </>
+      )}
       {messages.map((msg, i) => {
         const isLast = i === messages.length - 1;
 

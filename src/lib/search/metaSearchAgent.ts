@@ -30,7 +30,7 @@ import fs from 'node:fs';
 import { EventEmitter } from 'events';
 
 // Создаем локальный эмиттер событий
-const eventEmitter = new EventEmitter();
+export const eventEmitter = new EventEmitter();
 
 // Тип для потока событий LangChain
 interface StreamEvent {
@@ -493,7 +493,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
     llm: BaseChatModel,
     originalQuery: string,
     initialDocs: Document[],
-    maxIterations?: number
+    maxIterations?: number,
+    emitter?: EventEmitter
   ): Promise<{
     docs: Document[]; 
     iterationDetails: Array<{ 
@@ -518,11 +519,37 @@ class MetaSearchAgent implements MetaSearchAgentType {
     
     console.log(`Starting iterative search for: "${originalQuery}" with up to ${maxIter} iterations`);
     
+    if (eventEmitter) {
+      const eventData = {
+        type: 'searchStart',
+        query: originalQuery,
+        maxIterations: maxIter
+      };
+      console.log('Emitting searchProgress event:', eventData);
+      eventEmitter.emit('searchProgress', eventData);
+    }
+
     try {
       while (iteration < maxIter) {
         try {
+          if (eventEmitter) {
+            eventEmitter.emit('searchProgress', {
+              type: 'iterationStart',
+              current: iteration + 1,
+              total: maxIter
+            });
+          }
+
           const analysis = await this.analyzeSearchResults(llm, originalQuery, allDocs, iteration, maxIter);
           
+          if (eventEmitter) {
+            eventEmitter.emit('searchProgress', {
+              type: 'analysis',
+              confidence: analysis.confidence,
+              reasoning: analysis.analysisReasoning
+            });
+          }
+
           // Обновляем информацию о текущей итерации с анализом LLM
           if (iterationDetails[iteration]) {
             iterationDetails[iteration].analysis = analysis.analysisReasoning;
@@ -544,6 +571,15 @@ class MetaSearchAgent implements MetaSearchAgentType {
           for (let i = 0; i < analysis.searchQueries.length; i++) {
             const query = analysis.searchQueries[i];
             console.log(`Searching with query: "${query}"`);
+            
+            if (eventEmitter) {
+              eventEmitter.emit('searchProgress', {
+                type: 'queries',
+                query: query,
+                current: i + 1,
+                total: analysis.searchQueries.length
+              });
+            }
             
             // Выполняем поиск с текущим запросом
             const newDocs = await this.performSingleSearch(query);
@@ -572,6 +608,15 @@ class MetaSearchAgent implements MetaSearchAgentType {
           }
           
           console.log(`Added ${totalNewDocs} new documents from ${analysis.searchQueries.length} queries`);
+
+          if (eventEmitter) {
+            eventEmitter.emit('searchProgress', {
+              type: 'iterationComplete',
+              current: iteration + 1,
+              total: maxIter,
+              newDocs: totalNewDocs
+            });
+          }
           
           // Если не получили новых документов, прерываем цикл
           if (totalNewDocs === 0) {
