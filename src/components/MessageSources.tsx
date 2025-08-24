@@ -20,7 +20,7 @@ interface IterationDetail {
 const MessageSources = ({ sources }: { sources: Document[] }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Извлекаем детали итеративного поиска из метаданных первого источника
+  // Extract iterative search details from the first source metadata
   const iterationDetails = sources[0]?.metadata?.iterationDetails as IterationDetail[] | undefined;
 
   const closeModal = () => {
@@ -35,7 +35,7 @@ const MessageSources = ({ sources }: { sources: Document[] }) => {
 
   return (
     <>
-      {/* Компонент для отображения деталей итеративного поиска */}
+      {/* Component for displaying iterative search details */}
       {iterationDetails && <SearchIterations iterationDetails={iterationDetails} />}
     
       {/* Исходные источники */}

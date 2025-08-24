@@ -645,6 +645,15 @@ class MetaSearchAgent implements MetaSearchAgentType {
     console.log(`Iterative search completed. Total documents: ${allDocs.length}`);
     console.log(`Iteration details:`, JSON.stringify(iterationDetails, null, 2));
     
+    // Отправляем событие завершения всего итеративного поиска
+    if (eventEmitter) {
+      eventEmitter.emit('searchProgress', {
+        type: 'searchComplete',
+        totalDocuments: allDocs.length,
+        totalIterations: iteration
+      });
+    }
+    
     return {
       docs: allDocs,
       iterationDetails
@@ -822,7 +831,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
         llm,
         query,
         docsWithContent,
-        maxIterations
+        maxIterations,
+        eventEmitter
       );
       
       // Сохраняем информацию об итерациях для использования в UI

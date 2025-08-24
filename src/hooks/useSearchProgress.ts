@@ -6,7 +6,7 @@ export function useSearchProgress(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) {
-      setSearchEvents([]);
+      // Не сбрасываем события сразу, оставляем для отображения
       return;
     }
 
@@ -19,8 +19,12 @@ export function useSearchProgress(enabled: boolean) {
         const data = JSON.parse(event.data);
         console.log('Parsed event data:', data);
         if (data.event === 'searchProgress') {
+          const eventWithTimestamp = {
+            ...data.data,
+            timestamp: data.data.timestamp || Date.now()
+          };
           setSearchEvents(prev => {
-            const newEvents = [...prev, data.data];
+            const newEvents = [...prev, eventWithTimestamp];
             console.log('Updated search events:', newEvents);
             return newEvents;
           });
@@ -45,6 +49,13 @@ export function useSearchProgress(enabled: boolean) {
       eventSource.removeEventListener('message', handleMessage);
       eventSource.close();
     };
+  }, [enabled]);
+
+  // Reset events only when starting a new search
+  useEffect(() => {
+    if (enabled) {
+      setSearchEvents([]);
+    }
   }, [enabled]);
 
   return searchEvents;

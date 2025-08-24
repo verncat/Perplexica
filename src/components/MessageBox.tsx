@@ -20,6 +20,7 @@ import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
 import { useSpeech } from 'react-text-to-speech';
 import ThinkBox from './ThinkBox';
+import { SearchProgress } from './SearchProgress';
 
 const ThinkTagProcessor = ({
   children,
@@ -42,6 +43,8 @@ const MessageBox = ({
   isLast,
   rewrite,
   sendMessage,
+  searchEvents,
+  optimizationMode,
 }: {
   message: Message;
   messageIndex: number;
@@ -51,10 +54,19 @@ const MessageBox = ({
   isLast: boolean;
   rewrite: (messageId: string) => void;
   sendMessage: (message: string) => void;
+  searchEvents?: any[];
+  optimizationMode?: string;
 }) => {
   const [parsedMessage, setParsedMessage] = useState(message.content);
   const [speechMessage, setSpeechMessage] = useState(message.content);
   const [thinkingEnded, setThinkingEnded] = useState(false);
+
+  // Determine whether to show search progress
+  const shouldShowSearchProgress = 
+    optimizationMode === 'quality' && 
+    isLast && 
+    message.role === 'assistant' && 
+    (loading || (searchEvents && searchEvents.length > 0)); // Показываем при загрузке или если есть события
 
   useEffect(() => {
     const citationRegex = /\[([^\]]+)\]/g;
@@ -172,19 +184,51 @@ const MessageBox = ({
                 <MessageSources sources={message.sources} />
               </div>
             )}
-            <div className="flex flex-col space-y-2">
-              <div className="flex flex-row items-center space-x-2">
-                <Disc3
-                  className={cn(
-                    'text-black dark:text-white',
-                    isLast && loading ? 'animate-spin' : 'animate-none',
-                  )}
-                  size={20}
-                />
-                <h3 className="text-black dark:text-white font-medium text-xl">
-                  Answer
-                </h3>
-              </div>
+            <div className={cn("flex flex-col", optimizationMode === 'quality' ? "space-y-4" : "space-y-2")}>
+              {/* Заголовок Answer - скрываем в качественном режиме */}
+              {optimizationMode !== 'quality' && (
+                <div className="flex flex-row items-center space-x-2">
+                  <Disc3
+                    className={cn(
+                      'text-black dark:text-white',
+                      isLast && loading ? 'animate-spin' : 'animate-none',
+                    )}
+                    size={20}
+                  />
+                  <h3 className="text-black dark:text-white font-medium text-xl">
+                    Answer
+                  </h3>
+                </div>
+              )}
+
+              {/* Search Progress Timeline */}
+              {shouldShowSearchProgress && (
+                <div className="mb-4">
+                  <div className={cn(
+                    "transition-all duration-500 ease-in-out",
+                    loading ? "animate-fadeInUp" : ""
+                  )}>
+                    {searchEvents && searchEvents.length > 0 ? (
+                      <SearchProgress events={searchEvents} compact={true} />
+                    ) : loading && optimizationMode === 'quality' ? (
+                      <div className="bg-light-100/50 dark:bg-dark-100/50 border border-light-200 dark:border-dark-200 rounded-lg p-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="relative">
+                            <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                              <Disc3 className="w-3 h-3 text-white animate-spin" />
+                            </div>
+                            <div className="absolute inset-0 w-5 h-5 bg-blue-500/30 rounded-full animate-ping" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-black dark:text-white">Quality Search</p>
+                            <p className="text-xs text-black/60 dark:text-white/60">Preparing iterative analysis...</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
 
               <Markdown
                 className={cn(

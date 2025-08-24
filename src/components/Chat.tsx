@@ -41,8 +41,16 @@ const Chat = ({
   const [dividerWidth, setDividerWidth] = useState(0);
   const dividerRef = useRef<HTMLDivElement | null>(null);
   const messageEnd = useRef<HTMLDivElement | null>(null);
-  const isQualityMode = optimizationMode === 'quality' && loading;
-  const searchEvents = useSearchProgress(isQualityMode);
+  const isQualityMode = optimizationMode === 'quality';
+  const searchEvents = useSearchProgress(isQualityMode && loading);
+
+  console.log('Chat component:', { 
+    optimizationMode, 
+    isQualityMode, 
+    loading, 
+    searchEventsLength: searchEvents.length,
+    messageAppeared 
+  });
 
   useEffect(() => {
     const updateDividerWidth = () => {
@@ -76,12 +84,6 @@ const Chat = ({
 
   return (
     <div className="flex flex-col space-y-6 pt-8 pb-44 lg:pb-32 sm:mx-4 md:mx-8">
-      {optimizationMode === 'quality' && loading && (
-        <>
-          <div>Mode: {optimizationMode}, Loading: {loading.toString()}, Events: {searchEvents.length}</div>
-          {searchEvents.length > 0 && <SearchProgress events={searchEvents} />}
-        </>
-      )}
       {messages.map((msg, i) => {
         const isLast = i === messages.length - 1;
 
@@ -97,6 +99,8 @@ const Chat = ({
               isLast={isLast}
               rewrite={rewrite}
               sendMessage={sendMessage}
+              searchEvents={isLast && isQualityMode ? searchEvents : undefined}
+              optimizationMode={optimizationMode}
             />
             {!isLast && msg.role === 'assistant' && (
               <div className="h-px w-full bg-light-secondary dark:bg-dark-secondary" />
@@ -104,7 +108,12 @@ const Chat = ({
           </Fragment>
         );
       })}
-      {loading && !messageAppeared && <MessageBoxLoading />}
+      {loading && !messageAppeared && (
+        <MessageBoxLoading 
+          searchEvents={searchEvents}
+          optimizationMode={optimizationMode}
+        />
+      )}
       <div ref={messageEnd} className="h-0" />
       {dividerWidth > 0 && (
         <div

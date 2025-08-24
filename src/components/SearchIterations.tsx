@@ -39,7 +39,7 @@ const SearchIterations = ({
         className="flex items-center space-x-2 text-sm px-3 py-1.5 rounded-lg bg-light-100 dark:bg-dark-100 hover:bg-light-200 dark:hover:bg-dark-200 text-black/70 dark:text-white/70"
       >
         <RefreshCcwDot size={14} />
-        <span>Поиск выполнен за {iterationDetails.length} итераций</span>
+        <span>Search completed in {iterationDetails.length} iterations</span>
       </button>
 
       <Transition appear show={isDialogOpen} as={Fragment}>
@@ -58,7 +58,7 @@ const SearchIterations = ({
                 <DialogPanel className="w-full max-w-2xl transform rounded-2xl bg-light-secondary dark:bg-dark-secondary border border-light-200 dark:border-dark-200 p-6 text-left align-middle shadow-xl transition-all">
                   <DialogTitle className="text-lg font-medium leading-6 text-black dark:text-white flex items-center space-x-2">
                     <Search size={20} />
-                    <span>Детали итеративного поиска</span>
+                    <span>Iterative Search Details</span>
                   </DialogTitle>
                   <div className="mt-4 overflow-auto max-h-[500px] pr-2">
                     <div className="space-y-4">
@@ -69,17 +69,17 @@ const SearchIterations = ({
                         >
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="font-medium text-black dark:text-white text-md">
-                              Итерация {detail.iteration}
+                              Iteration {detail.iteration}
                             </h3>
                             {index === iterationDetails.length - 1 && (
                               <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 rounded-full">
-                                Финальная
+                                Final
                               </span>
                             )}
                           </div>
                           
                           <div className="mb-2">
-                            <h4 className="text-xs text-black/60 dark:text-white/60 mb-1">Запрос:</h4>
+                            <h4 className="text-xs text-black/60 dark:text-white/60 mb-1">Query:</h4>
                             <div className="bg-light-secondary dark:bg-dark-secondary p-2 rounded border border-light-200 dark:border-dark-200 text-sm text-black dark:text-white">
                               {detail.query}
                             </div>
@@ -87,7 +87,7 @@ const SearchIterations = ({
 
                           {detail.analysis && (
                             <div>
-                              <h4 className="text-xs text-black/60 dark:text-white/60 mb-1">Анализ:</h4>
+                              <h4 className="text-xs text-black/60 dark:text-white/60 mb-1">Analysis:</h4>
                               <div className="bg-light-secondary dark:bg-dark-secondary p-2 rounded border border-light-200 dark:border-dark-200 text-sm text-black/80 dark:text-white/80">
                                 {detail.analysis}
                               </div>
