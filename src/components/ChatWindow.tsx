@@ -308,7 +308,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
   const [fileIds, setFileIds] = useState<string[]>([]);
 
   const [focusMode, setFocusMode] = useState('webSearch');
-  const [optimizationMode, setOptimizationMode] = useState('speed');
+  const [optimizationMode, setOptimizationMode] = useState('quality');
   const [maxIterations, setMaxIterations] = useState(2);
 
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
