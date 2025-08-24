@@ -973,6 +973,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
     systemInstructions: string,
     maxIterations?: number,
   ) {
+    console.log('SearchAndAnswer called with maxIterations:', maxIterations, 'optimizationMode:', optimizationMode);
     const emitter = new EventEmitter();
 
     const answeringChain = await this.createAnsweringChain(

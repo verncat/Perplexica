@@ -212,6 +212,8 @@ const loadMessages = async (
   setIsMessagesLoaded: (loaded: boolean) => void,
   setChatHistory: (history: [string, string][]) => void,
   setFocusMode: (mode: string) => void,
+  setOptimizationMode: (mode: string) => void,
+  setMaxIterations: (iterations: number) => void,
   setNotFound: (notFound: boolean) => void,
   setFiles: (files: File[]) => void,
   setFileIds: (fileIds: string[]) => void,
@@ -261,6 +263,8 @@ const loadMessages = async (
 
   setChatHistory(history);
   setFocusMode(data.chat.focusMode);
+  setOptimizationMode(data.chat.optimizationMode || 'quality');
+  setMaxIterations(data.chat.maxIterations || 2);
   setIsMessagesLoaded(true);
 };
 
@@ -328,6 +332,8 @@ const ChatWindow = ({ id }: { id?: string }) => {
         setIsMessagesLoaded,
         setChatHistory,
         setFocusMode,
+        setOptimizationMode,
+        setMaxIterations,
         setNotFound,
         setFiles,
         setFileIds,

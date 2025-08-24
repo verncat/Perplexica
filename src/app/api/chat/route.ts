@@ -45,6 +45,7 @@ type Body = {
   message: Message;
   optimizationMode: 'speed' | 'balanced' | 'quality';
   focusMode: string;
+  maxIterations?: number;
   history: Array<[string, string]>;
   files: Array<string>;
   chatModel: ChatModel;
@@ -151,6 +152,8 @@ const handleHistorySave = async (
   message: Message,
   humanMessageId: string,
   focusMode: string,
+  optimizationMode: string,
+  maxIterations: number,
   files: string[],
 ) => {
   const chat = await db.query.chats.findFirst({
@@ -165,6 +168,8 @@ const handleHistorySave = async (
         title: message.content,
         createdAt: new Date().toString(),
         focusMode: focusMode,
+        optimizationMode: optimizationMode,
+        maxIterations: maxIterations || 2,
         files: files.map(getFileDetails),
       })
       .execute();
@@ -299,6 +304,7 @@ export const POST = async (req: Request) => {
       body.optimizationMode,
       body.files,
       body.systemInstructions,
+      body.maxIterations,
     );
 
     const responseStream = new TransformStream();
@@ -306,7 +312,7 @@ export const POST = async (req: Request) => {
     const encoder = new TextEncoder();
 
     handleEmitterEvents(stream, writer, encoder, aiMessageId, message.chatId);
-    handleHistorySave(message, humanMessageId, body.focusMode, body.files);
+    handleHistorySave(message, humanMessageId, body.focusMode, body.optimizationMode, body.maxIterations || 2, body.files);
 
     return new Response(responseStream.readable, {
       headers: {

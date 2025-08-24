@@ -22,6 +22,8 @@ export const chats = sqliteTable('chats', {
   title: text('title').notNull(),
   createdAt: text('createdAt').notNull(),
   focusMode: text('focusMode').notNull(),
+  optimizationMode: text('optimizationMode').notNull().default('quality'),
+  maxIterations: integer('maxIterations').notNull().default(2),
   files: text('files', { mode: 'json' })
     .$type<File[]>()
     .default(sql`'[]'`),
