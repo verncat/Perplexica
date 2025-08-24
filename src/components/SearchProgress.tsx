@@ -35,6 +35,26 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
   const maxIterations = events.find(e => e.type === 'searchStart')?.maxIterations || 0;
   const lastAnalysis = events.filter(e => e.type === 'analysis').slice(-1)[0];
   
+  // Get confidence color based on percentage
+  const getConfidenceColor = (confidence: number) => {
+    const percentage = Math.round(confidence * 100);
+    if (percentage >= 80) return "bg-gradient-to-r from-green-400 to-emerald-500 text-white";
+    if (percentage >= 60) return "bg-gradient-to-r from-yellow-400 to-amber-500 text-white";
+    if (percentage >= 40) return "bg-gradient-to-r from-orange-400 to-red-500 text-white";
+    return "bg-gradient-to-r from-red-500 to-pink-600 text-white";
+  };
+
+  // Get confidence tooltip text based on percentage
+  const getConfidenceTooltip = (confidence: number) => {
+    const percentage = Math.round(confidence * 100);
+    if (percentage >= 80) return "High confidence - Results are highly relevant and accurate";
+    if (percentage >= 60) return "Good confidence - Results are mostly relevant";
+    if (percentage >= 40) return "Moderate confidence - Results may need verification";
+    return "Low confidence - Results should be carefully reviewed";
+  };
+
+  const confidencePercentage = lastAnalysis?.confidence ? Math.round(lastAnalysis.confidence * 100) : null;
+  
   // Enhanced progress calculation logic
   const calculateProgress = () => {
     if (maxIterations === 0) return 0;
@@ -358,10 +378,21 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
               </div>
               <div>
                 <h3 className={cn(
-                  "font-medium text-dark-900 dark:text-light-100",
+                  "font-medium text-dark-900 dark:text-light-100 flex items-center gap-2",
                   compact ? "text-sm" : "text-base"
                 )}>
                   Quality Search Progress
+                  {confidencePercentage !== null && (
+                    <span 
+                      className={cn(
+                        "text-xs font-medium px-2 py-1 rounded-full cursor-help",
+                        getConfidenceColor(lastAnalysis.confidence!)
+                      )}
+                      title={getConfidenceTooltip(lastAnalysis.confidence!)}
+                    >
+                      {confidencePercentage}%
+                    </span>
+                  )}
                 </h3>
                 <p className={cn(
                   "text-dark-600 dark:text-light-400",
@@ -414,33 +445,6 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
         {/* Timeline content - hidden when collapsed */}
         {!isCollapsed && (
           <div className={cn("px-4 py-3", compact ? "" : "px-6 py-4")}>
-            {lastAnalysis?.confidence && (
-              <div className={cn(
-                "mb-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700",
-                compact ? "text-xs" : "text-sm"
-              )}>
-                <div className="flex items-center space-x-2 mb-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="font-medium text-blue-700 dark:text-blue-300">
-                    Confidence Score: {Math.round(lastAnalysis.confidence * 100)}%
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-4">
-              <div className="flex justify-between text-sm text-black/60 dark:text-white/60 mb-2">
-                <span>Progress</span>
-                <span>{progress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
-                <div 
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-
             {/* Timeline */}
             <div className="space-y-3" ref={timelineRef}>
               {events.length === 0 ? (
