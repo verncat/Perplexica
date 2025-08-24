@@ -211,6 +211,59 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
     return grouped;
   };
 
+  // Check if event is between iteration start and complete
+  const isEventBetweenIterations = (events: (SearchProgressEvent | { type: 'grouped-queries', queries: SearchProgressEvent[], timestamp: number })[], currentIndex: number) => {
+    const event = events[currentIndex];
+    
+    // Skip if this is an iteration event itself
+    if (isIterationEvent(event)) return false;
+    
+    // Look backwards for the nearest iteration start
+    let hasIterationStart = false;
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      const prevEvent = events[i];
+      if (prevEvent.type === 'iterationComplete') {
+        // If we hit a complete before a start, we're not between iterations
+        break;
+      }
+      if (prevEvent.type === 'iterationStart') {
+        hasIterationStart = true;
+        break;
+      }
+    }
+    
+    // Look forwards for the nearest iteration complete
+    let hasIterationComplete = false;
+    for (let i = currentIndex + 1; i < events.length; i++) {
+      const nextEvent = events[i];
+      if (nextEvent.type === 'iterationStart') {
+        // If we hit a start before a complete, we're not between iterations
+        break;
+      }
+      if (nextEvent.type === 'iterationComplete') {
+        hasIterationComplete = true;
+        break;
+      }
+    }
+    
+    return hasIterationStart && hasIterationComplete;
+  };
+
+  // Check if event is an iteration milestone
+  const isIterationEvent = (event: SearchProgressEvent | { type: 'grouped-queries' }) => {
+    return event.type === 'iterationStart' || event.type === 'iterationComplete';
+  };
+
+  // Get special styling for iteration events (more subtle/flat)
+  const getIterationEventStyle = (event: SearchProgressEvent | { type: 'grouped-queries' }) => {
+    if (!isIterationEvent(event)) return {};
+    
+    return {
+      backgroundColor: 'rgba(148, 163, 184, 0.05)', // Very subtle gray background
+      borderLeft: `2px solid rgba(148, 163, 184, 0.3)` // Muted gray border
+    };
+  };
+
   // Generate random color for badges
   const getBadgeColor = (index: number) => {
     const colors = [
@@ -412,37 +465,51 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
                   const isActive = event.type === 'grouped-queries' ? false : isEventActive(event as SearchProgressEvent, index);
                   const colorClass = getEventColor(event, isActive);
                   const isLastEvent = index === groupEvents(events).length - 1;
+                  const isIteration = isIterationEvent(event);
+                  const iterationStyle = getIterationEventStyle(event);
+                  const isBetweenIterations = isEventBetweenIterations(groupEvents(events), index);
                   
                   return (
                     <div 
                       key={event.type === 'grouped-queries' ? `grouped-queries-${event.timestamp}` : `${event.type}-${event.timestamp}-${index}`}
                       ref={isLastEvent ? lastEventRef : null}
                       className={cn(
-                        "relative flex items-start space-x-3 timeline-enter",
+                        "relative flex items-start timeline-enter rounded-lg transition-all duration-300",
                         compact ? "p-2" : "p-3",
-                        isLastEvent && isNewEvent && "animate-pulse"
+                        isLastEvent && isNewEvent && "animate-pulse",
+                        // Add left margin and subtle background for events between iterations
+                        isBetweenIterations ? "ml-6 pl-4 space-x-3 bg-blue-50/20 dark:bg-blue-900/10" : "space-x-3"
                       )}
                       style={{
-                        animationDelay: `${index * 0.1}s`
+                        animationDelay: `${index * 0.1}s`,
+                        ...iterationStyle
                       }}
                     >
+                      
                       {/* Connecting line */}
                       {index < groupEvents(events).length - 1 && (
-                        <div className={cn(
-                          "absolute left-4 mt-8 w-0.5 bg-gradient-to-b from-light-300 to-transparent dark:from-dark-300",
-                          compact ? "h-8" : "h-10"
-                        )} />
+                        <>
+                          {/* Main connecting line */}
+                          <div className={cn(
+                            "absolute left-4 mt-8 w-0.5 bg-gradient-to-b from-light-300 to-transparent dark:from-dark-300",
+                            compact ? "h-8" : "h-10"
+                          )} />
+                        </>
                       )}
                       
                       {/* Event icon */}
                       <div className="flex-shrink-0 relative z-10">
                         <div className={cn(
-                          `bg-gradient-to-br ${colorClass} rounded-full flex items-center justify-center shadow-lg`,
+                          `bg-gradient-to-br ${colorClass} rounded-full flex items-center justify-center transition-all duration-300`,
+                          // Same size for all events - no special sizing for iterations
                           compact ? "w-6 h-6" : "w-8 h-8",
-                          isActive && "ring-2 ring-blue-300 dark:ring-blue-600"
+                          isActive && "ring-2 ring-blue-300 dark:ring-blue-600",
+                          // Remove extra effects for iterations - just subtle shadow
+                          isIteration && "shadow-sm"
                         )}>
                           <Icon className={cn(
                             "text-white",
+                            // Same size for all event icons
                             compact ? "w-3 h-3" : "w-4 h-4",
                             isActive && (event as SearchProgressEvent).type === 'iterationStart' && "animate-spin"
                           )} />
@@ -452,6 +519,7 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
                         {isActive && (
                           <div className={cn(
                             "absolute inset-0 bg-blue-500/30 rounded-full animate-ping",
+                            // Same size for all events
                             compact ? "w-6 h-6" : "w-8 h-8"
                           )} />
                         )}
@@ -461,9 +529,22 @@ export const SearchProgress: React.FC<SearchProgressProps> = ({ events, compact 
                       <div className="flex-grow min-w-0">
                         <div className={cn(
                           "font-medium text-dark-900 dark:text-light-100",
-                          compact ? "text-sm" : "text-base"
+                          compact ? "text-sm" : "text-base",
+                          // More subtle styling for iteration titles
+                          isIteration && "text-gray-600 dark:text-gray-400 font-normal text-sm"
                         )}>
-                          {getEventTitle(event)}
+                          <div className="flex items-center gap-2">
+                            {getEventTitle(event)}
+                            {/* Subtle badge for iteration events */}
+                            {isIteration && (
+                              <span className={cn(
+                                "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-normal",
+                                "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                              )}>
+                                {event.type === 'iterationStart' ? 'start' : 'done'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className={cn(
                           "text-dark-600 dark:text-light-400 mt-1",
